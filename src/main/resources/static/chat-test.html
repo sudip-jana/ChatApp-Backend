@@ -1,0 +1,143 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Chat Backend Test</title>
+    <style>
+        body { font-family: Arial; max-width: 700px; margin: 30px auto; }
+        input, button { padding: 10px; margin: 5px; }
+        #log { background: #f3f3f3; padding: 15px; min-height: 200px; }
+    </style>
+</head>
+<body>
+<h2>Spring Boot Chat Test</h2>
+
+<input id="token" placeholder="Paste login access token" />
+<button onclick="connect()">Connect</button>
+<button onclick="disconnect()">Disconnect</button>
+
+<p id="status">Disconnected</p>
+
+<hr>
+<input id="receiver" placeholder="Receiver (bob)" />
+<input id="message" placeholder="Type a message" />
+<button onclick="sendMessage()">Send</button>
+
+<h3>Events and messages</h3>
+<div id="log"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@stomp/stompjs@7.1.1/bundles/stomp.umd.min.js"></script>
+<script>
+    let client;
+
+    function log(message) {
+        const item = document.createElement("p");
+        item.textContent = message;
+        document.getElementById("log").prepend(item);
+    }
+
+
+    function connect() {
+        const token = document.getElementById("token").value.trim();
+
+        if (!token) {
+            alert("Please log in and enter your access token");
+            return;
+        }
+
+        if (client && client.active) {
+            log("Already connected or connecting");
+            return;
+        }
+
+        client = new StompJs.Client({
+            brokerURL: "ws://localhost:8080/ws",
+
+            connectHeaders: {
+                Authorization: "Bearer " + token
+            },
+
+            reconnectDelay: 3000,
+
+            onConnect: () => {
+                log("Authenticated WebSocket connected");
+
+                client.subscribe("/user/queue/messages", frame => {
+                    const message = JSON.parse(frame.body);
+                    log(message.sender + ": " + message.content);
+
+                    client.publish({
+                        destination: "/app/chat.ack",
+                        body: JSON.stringify(message.id)
+                    });
+                });
+
+                client.subscribe("/topic/presence", frame => {
+                    const presence = JSON.parse(frame.body);
+                    log(
+                        presence.username + " is " +
+                        (presence.online ? "ONLINE" : "OFFLINE")
+                    );
+                });
+
+                client.publish({
+                    destination: "/app/chat.pending",
+                    body: "{}"
+                });
+            },
+
+            onStompError: frame => {
+                log("STOMP error: " + frame.headers.message);
+            },
+
+            onWebSocketError: event => {
+                console.error("WebSocket error", event);
+                log("WebSocket connection failed; check server logs.");
+            }
+        });
+
+        client.activate();
+    }
+
+
+
+    function sendMessage() {
+        if (!client || !client.connected) {
+            log("Connect first");
+            return;
+        }
+
+        const receiver =
+            document.getElementById("receiver").value.trim();
+        const content =
+            document.getElementById("message").value.trim();
+
+        if (!receiver || !content) {
+            alert("Enter receiver and message");
+            return;
+        }
+
+        client.publish({
+            destination: "/app/chat.send",
+            body: JSON.stringify({
+                receiver: receiver,
+                content: content
+            })
+        });
+
+        document.getElementById("message").value = "";
+    }
+
+
+    function disconnect() {
+        if (client) {
+            client.deactivate();
+            document.getElementById("status").textContent =
+                "Disconnected";
+            log("Disconnected");
+        }
+    }
+</script>
+</body>
+</html>
