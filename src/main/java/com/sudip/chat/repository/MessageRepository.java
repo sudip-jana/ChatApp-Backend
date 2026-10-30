@@ -41,4 +41,17 @@ public interface MessageRepository
             @Param("beforeId") Long beforeId,
             Pageable pageable
     );
+
+    @Query(value = """
+    SELECT m.*
+    FROM messages m
+    INNER JOIN (
+        SELECT MAX(id) AS id
+        FROM messages
+        WHERE sender = :me OR receiver = :me
+        GROUP BY IF(sender = :me, receiver, sender)
+    ) latest ON latest.id = m.id
+    ORDER BY m.id DESC
+    """, nativeQuery = true)
+    List<Message> findLatestPerConversation(@Param("me") String me);
 }
