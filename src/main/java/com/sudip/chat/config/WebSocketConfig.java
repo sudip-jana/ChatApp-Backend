@@ -41,7 +41,8 @@ public class WebSocketConfig
         registry.addEndpoint("/ws")
                 .setAllowedOrigins(
                         "http://localhost:5173",
-                        "http://localhost:8080"
+                        "http://localhost:8080",
+                        "https://chat-app-frontend-zeta-gilt.vercel.app/"
                 );
     }
 
